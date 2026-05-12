@@ -6,7 +6,7 @@ class AIBrain:
     def __init__(self, name, role):
         self.name = name
         self.role = role
-        # 从 Streamlit 的 Secrets 中读取 Key
+        # 确保你在 Streamlit Secrets 中配置了 GEMINI_KEY
         api_key = st.secrets["GEMINI_KEY"]
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel('gemini-1.5-flash')
@@ -19,15 +19,19 @@ class AIBrain:
         任务：
         1. 写一段50字内的中文发言，要有逻辑。
         2. 给存活玩家打分（0-100，100最像狼）。
-        必须输出 JSON: {{"speech": "...", "scores": {{"玩家名": 分数}}}}
+        必须输出严格的 JSON 格式: {{"speech": "发言内容", "scores": {{"玩家名": 分数}}}}
         """
         try:
             response = self.model.generate_content(prompt)
-            # 这里的引号必须成对出现
-            clean_text = response.text.replace('```json', '')
-            json_str = clean_text.replace('```', '').strip()
-            return json.loads(json_str)
+            raw_text = response.text
+            
+            # 清理可能存在的 Markdown 代码块标记
+            clean_text = raw_text.replace('```json', '').replace('```', '').strip()
+            
+            return json.loads(clean_text)
         except Exception as e:
-            # 打印错误方便调试
-            print(f"Error: {e}")
-            return {"speech": "我正在观察，先听大家的。", "scores": {p: 50 for p in alive_players}}
+            # 如果 AI 返回格式错误或 API 调用失败，返回保底数据
+            return {
+                "speech": "我还在观察大家的发言...", 
+                "scores": {p: 50 for p in alive_players}
+            }
