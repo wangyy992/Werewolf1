@@ -101,7 +101,7 @@ div[data-testid="stSelectbox"] label, div[data-testid="stTextInput"] label {
 """, unsafe_allow_html=True)
 
 # ─── API Key ────────────────────────────────────────────────────────────────────
-API_KEY = "AIzaSyAX6VJJtydkkKwPWIPZDwpXf8BBi_6_st0"
+API_KEY = st.secrets["GEMINI_KEY"]
 
 # ─── Helpers ───────────────────────────────────────────────────────────────────
 ROLE_ICONS = {"狼人": "🐺", "预言家": "🔮", "女巫": "🧙", "猎人": "🏹", "平民": "👤"}
