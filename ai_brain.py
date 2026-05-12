@@ -6,32 +6,29 @@ class AIBrain:
     def __init__(self, name, role):
         self.name = name
         self.role = role
-        # 确保你在 Streamlit Secrets 中配置了 GEMINI_KEY
         api_key = st.secrets["GEMINI_KEY"]
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel('gemini-1.5-flash')
 
-    def think_and_speak(self, history, alive_players):
-        prompt = f"""
-        你正在玩狼人杀。你的名字是 {self.name}，身份是 {self.role}。
-        当前存活：{', '.join(alive_players)}。
-        记录：{history}
-        任务：
-        1. 写一段50字内的中文发言，要有逻辑。
-        2. 给存活玩家打分（0-100，100最像狼）。
-        必须输出严格的 JSON 格式: {{"speech": "发言内容", "scores": {{"玩家名": 分数}}}}
-        """
+    def act(self, phase, history, alive_players):
+        # 根据不同阶段给 AI 不同的指令
+        context = f"你是{self.name}，身份是{self.role}。当前存活：{alive_players}。"
+        
+        if phase == "NIGHT":
+            if self.role == "狼人":
+                task = "请从存活的非狼人玩家中选一个杀掉。只需返回JSON。"
+            else:
+                return None # 非狼人在晚上不发言
+        elif phase == "DAY":
+            task = "这是白天发言环节，请分析形势并简短发言（50字内），并给所有人打分（0-100，100最像狼）。"
+        else: # VOTE
+            task = "请决定你今天要投票给谁。只需返回JSON。"
+
+        prompt = f"{context}\n历史记录：{history}\n任务：{task}\n输出格式：{{\"speech\": \"...\", \"scores\": {{...}}, \"target\": \"被选者名字\"}}"
+        
         try:
             response = self.model.generate_content(prompt)
-            raw_text = response.text
-            
-            # 清理可能存在的 Markdown 代码块标记
-            clean_text = raw_text.replace('```json', '').replace('```', '').strip()
-            
+            clean_text = response.text.replace('```json', '').replace('```', '').strip()
             return json.loads(clean_text)
-        except Exception as e:
-            # 如果 AI 返回格式错误或 API 调用失败，返回保底数据
-            return {
-                "speech": "我还在观察大家的发言...", 
-                "scores": {p: 50 for p in alive_players}
-            }
+        except:
+            return {"speech": "我保持沉默。", "scores": {p: 50 for p in alive_players}, "target": None}
