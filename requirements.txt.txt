@@ -1,0 +1,21 @@
+streamlit
+    google-generativeai
+    pandas
+    plotly
+    ```
+2.  **上传 GitHub**：
+    *   `git init`
+    *   `git add .`
+    *   `git commit -m "feat: AI Werewolf Simulator"`
+    *   `git push origin main`
+3.  **连接 Streamlit Cloud**：
+    *   去 [streamlit.io/cloud](https://streamlit.io/cloud) 登录。
+    *   选择你的仓库和 `app.py`。
+    *   **关键点**：在 Streamlit 设置里添加 `Secrets`，把你的 `GEMINI_API_KEY` 放进去（不要直接写在代码里，会被 GitHub 爬虫封掉）。
+
+### 为什么这能体现 BDA 背景？
+*   **矩阵化思维**：把混乱的发言转成 `Heatmap` 矩阵。
+*   **Agent 模拟**：通过 AI 模拟不同 Persona 的行为。
+*   **不烧 Token**：使用了 Gemini 1.5 Flash，速度快且免费额度高，非常适合这种多轮对话。
+
+你可以先在本地运行 `streamlit run app.py` 试试。这个“阿姨手抖”级别的随机性被你转化成了**可观测的矩阵波动**，这就是高级感。
