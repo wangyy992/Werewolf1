@@ -23,8 +23,11 @@ class AIBrain:
         """
         try:
             response = self.model.generate_content(prompt)
-            json_str = response.text.replace('```json', '').replace('
-```', '').strip()
+            # 这里的引号必须成对出现
+            clean_text = response.text.replace('```json', '')
+            json_str = clean_text.replace('```', '').strip()
             return json.loads(json_str)
-        except:
-            return {"speech": "我还在观察...", "scores": {p: 50 for p in alive_players}}
+        except Exception as e:
+            # 打印错误方便调试
+            print(f"Error: {e}")
+            return {"speech": "我正在观察，先听大家的。", "scores": {p: 50 for p in alive_players}}
