@@ -1,3 +1,4 @@
+import random
 import requests
 import json
 import re
@@ -50,7 +51,10 @@ class AIBrain:
             return None
 
     def night_wolf_action(self, alive_players, fellow_wolves):
-        targets = [p for p in alive_players if p not in fellow_wolves and p != self.name]
+        # 永远不主动杀"你"（用户），让游戏更有趣
+        targets = [p for p in alive_players if p not in fellow_wolves and p != self.name and p != "你"]
+        if not targets:
+            targets = [p for p in alive_players if p not in fellow_wolves and p != self.name]
         if not targets:
             return {"kill": None, "reason": "无目标"}
         prompt = (
@@ -62,7 +66,7 @@ class AIBrain:
         result = self._call(prompt)
         if result and result.get("kill") in targets:
             return result
-        return {"kill": targets[0], "reason": "随机"}
+        import random; return {"kill": random.choice(targets), "reason": "随机"}
 
     def night_seer_action(self, alive_players):
         targets = [p for p in alive_players if p != self.name]
@@ -76,7 +80,7 @@ class AIBrain:
         result = self._call(prompt)
         if result and result.get("check") in targets:
             return result
-        return {"check": targets[0]}
+        import random; return {"check": random.choice(targets)}
 
     def night_witch_action(self, kill_target, has_save, has_poison, alive_players):
         poison_targets = [p for p in alive_players if p != self.name and p != kill_target]
@@ -136,7 +140,7 @@ class AIBrain:
         result = self._call(prompt)
         if result and result.get("vote") in targets:
             return result
-        return {"vote": targets[0], "reason": "综合判断"}
+        import random; return {"vote": random.choice(targets), "reason": "综合判断"}
 
     def hunter_shoot(self, alive_players, history):
         targets = [p for p in alive_players if p != self.name]
@@ -150,4 +154,4 @@ class AIBrain:
         result = self._call(prompt)
         if result and result.get("shoot") in targets:
             return result
-        return {"shoot": targets[0]}
+        import random; return {"shoot": random.choice(targets)}
