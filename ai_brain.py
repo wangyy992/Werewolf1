@@ -18,29 +18,32 @@ class AIBrain:
                 headers={"Content-Type": "application/json"},
                 json={
                     "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {"temperature": 0.7, "maxOutputTokens": 300}
+                    "generationConfig": {"temperature": 0.7, "maxOutputTokens": 512}
                 },
                 timeout=15
             )
-            import streamlit as st
             if resp.status_code != 200:
-                st.session_state.setdefault("api_errors", []).append(
-                    f"{self.name}: HTTP {resp.status_code} - {resp.text[:200]}"
-                )
                 return None
             text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-            st.session_state.setdefault("api_last_raw", {})[self.name] = text[:200]
-            # 提取第一个 {...} 块
-            match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
-            if match:
-                return json.loads(match.group(0))
-            st.session_state.setdefault("api_errors", []).append(
-                f"{self.name}: JSON提取失败，原文: {text[:100]}"
-            )
-            return None
+            # 找到最外层的 { } 块（支持嵌套）
+            start = text.find("{")
+            if start == -1:
+                return None
+            depth = 0
+            end = -1
+            for i, ch in enumerate(text[start:], start):
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        end = i
+                        break
+            if end == -1:
+                return None
+            return json.loads(text[start:end+1])
         except Exception as e:
-            import streamlit as st
-            st.session_state.setdefault("api_errors", []).append(f"{self.name}: 异常 {e}")
+            print(f"[{self.name}] error: {e}")
             return None
 
     def night_wolf_action(self, alive_players, fellow_wolves):
