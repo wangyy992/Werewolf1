@@ -22,16 +22,25 @@ class AIBrain:
                 },
                 timeout=15
             )
+            import streamlit as st
             if resp.status_code != 200:
+                st.session_state.setdefault("api_errors", []).append(
+                    f"{self.name}: HTTP {resp.status_code} - {resp.text[:200]}"
+                )
                 return None
             text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+            st.session_state.setdefault("api_last_raw", {})[self.name] = text[:200]
             # 提取第一个 {...} 块
             match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
             if match:
                 return json.loads(match.group(0))
+            st.session_state.setdefault("api_errors", []).append(
+                f"{self.name}: JSON提取失败，原文: {text[:100]}"
+            )
             return None
         except Exception as e:
-            print(f"[{self.name}] error: {e}")
+            import streamlit as st
+            st.session_state.setdefault("api_errors", []).append(f"{self.name}: 异常 {e}")
             return None
 
     def night_wolf_action(self, alive_players, fellow_wolves):
