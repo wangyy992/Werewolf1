@@ -1,9 +1,9 @@
-import random
 import requests
 import json
 import re
+import random
 
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 
 class AIBrain:
     def __init__(self, name, role, api_key):
@@ -13,82 +13,65 @@ class AIBrain:
 
     def _call(self, prompt):
         try:
-            response = requests.post(
-                f"{GEMINI_API_URL}?key={self.api_key}",
+            resp = requests.post(
+                f"{GEMINI_URL}?key={self.api_key}",
                 headers={"Content-Type": "application/json"},
                 json={
                     "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {
-                        "temperature": 0.8,
-                        "maxOutputTokens": 512,
-                        "responseMimeType": "application/json"  # 强制JSON输出
-                    }
+                    "generationConfig": {"temperature": 0.7, "maxOutputTokens": 300}
                 },
                 timeout=15
             )
-            if response.status_code != 200:
+            if resp.status_code != 200:
                 return None
-
-            data = response.json()
-            text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-
-            # 多重清洗：去掉各种包裹
-            text = re.sub(r'^```json\s*', '', text)
-            text = re.sub(r'^```\s*', '', text)
-            text = re.sub(r'\s*```$', '', text)
-            text = text.strip()
-
-            # 如果还不是JSON，尝试提取第一个{}块
-            if not text.startswith('{'):
-                match = re.search(r'\{.*\}', text, re.DOTALL)
-                if match:
-                    text = match.group(0)
-
-            return json.loads(text)
-
+            text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+            # 提取第一个 {...} 块
+            match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
+            if match:
+                return json.loads(match.group(0))
+            return None
         except Exception as e:
-            print(f"[AIBrain] {self.name} error: {e}")
+            print(f"[{self.name}] error: {e}")
             return None
 
     def night_wolf_action(self, alive_players, fellow_wolves):
-        # 永远不主动杀"你"（用户），让游戏更有趣
         targets = [p for p in alive_players if p not in fellow_wolves and p != self.name and p != "你"]
         if not targets:
             targets = [p for p in alive_players if p not in fellow_wolves and p != self.name]
         if not targets:
-            return {"kill": None, "reason": "无目标"}
+            return {"kill": None}
         prompt = (
-            f"狼人杀游戏。你是{self.name}，身份狼人，同伴：{','.join(fellow_wolves)}。"
-            f"可击杀目标：{','.join(targets)}。"
-            f"选一个目标，优先选预言家女巫。"
-            f'只返回JSON：{{"kill":"目标名","reason":"理由"}}'
+            f'你是狼人杀游戏玩家{self.name}，身份狼人。'
+            f'今晚必须从以下玩家中选一人击杀：{targets}。'
+            f'直接输出JSON，不要解释：{{"kill": "{targets[0]}"}}'
+            f'（把{targets[0]}替换为你选的目标）'
         )
         result = self._call(prompt)
         if result and result.get("kill") in targets:
             return result
-        import random; return {"kill": random.choice(targets), "reason": "随机"}
+        return {"kill": random.choice(targets)}
 
     def night_seer_action(self, alive_players):
         targets = [p for p in alive_players if p != self.name]
         if not targets:
             return {"check": None}
         prompt = (
-            f"狼人杀游戏。你是{self.name}，身份预言家。"
-            f"存活玩家：{','.join(targets)}。选一人查验。"
-            f'只返回JSON：{{"check":"玩家名"}}'
+            f'你是狼人杀预言家{self.name}。'
+            f'从以下玩家选一人查验：{targets}。'
+            f'直接输出JSON：{{"check": "{targets[0]}"}}'
         )
         result = self._call(prompt)
         if result and result.get("check") in targets:
             return result
-        import random; return {"check": random.choice(targets)}
+        return {"check": random.choice(targets)}
 
     def night_witch_action(self, kill_target, has_save, has_poison, alive_players):
         poison_targets = [p for p in alive_players if p != self.name and p != kill_target]
         prompt = (
-            f"狼人杀游戏。你是{self.name}，身份女巫。"
-            f"狼人今晚杀：{kill_target}。解药：{'有' if has_save else '无'}，毒药：{'有' if has_poison else '无'}。"
-            f"同一晚不能同时用解药和毒药。可毒目标：{','.join(poison_targets)}。"
-            f'只返回JSON：{{"save":true或false,"poison":"玩家名或null"}}'
+            f'你是狼人杀女巫{self.name}。狼人今晚杀了{kill_target}。'
+            f'解药剩余：{"1瓶" if has_save else "0瓶"}，毒药剩余：{"1瓶" if has_poison else "0瓶"}。'
+            f'同一晚不能同时使用解药和毒药。可毒目标：{poison_targets}。'
+            f'直接输出JSON（poison填玩家名或null）：{{"save": false, "poison": null}}'
         )
         result = self._call(prompt)
         if result:
@@ -103,55 +86,59 @@ class AIBrain:
 
     def day_speech(self, history, alive_players, day, seer_results=None):
         others = [p for p in alive_players if p != self.name]
-        seer_hint = f"查验记录:{json.dumps(seer_results,ensure_ascii=False)}" if seer_results else ""
-        scores_template = ",".join([f'"{p}":50' for p in others])
+        scores_example = {p: 50 for p in others}
+        seer_hint = f"你的查验结果：{seer_results}。" if seer_results else ""
         prompt = (
-            f"狼人杀第{day}天。你是{self.name}，身份{self.role}。{seer_hint}"
-            f"存活：{','.join(alive_players)}。"
-            f"近期记录：{history[-500:]}"
-            f"任务：1.写60字内发言({'狼人要伪装' if self.role=='狼人' else '找出狼人'})。"
-            f"2.给每人打怀疑分0-100。"
-            f'只返回JSON：{{"speech":"发言","scores":{{{scores_template}}}}}'
-            f"scores必须包含：{','.join(others)}"
+            f'狼人杀第{day}天白天。你是{self.name}，身份{self.role}。{seer_hint}'
+            f'存活玩家：{alive_players}。近期记录：{history[-400:]}\n'
+            f'{"作为狼人要伪装成好人，不能暴露。" if self.role=="狼人" else "分析发言找出狼人。"}'
+            f'输出JSON，speech是你的发言(50字内)，scores是对每人的怀疑分(0-100)：'
+            f'{json.dumps({"speech": "你的发言", "scores": scores_example}, ensure_ascii=False)}'
         )
         result = self._call(prompt)
-        if result and "speech" in result and "scores" in result:
-            # 补全缺失的scores
+        if result and "speech" in result:
+            if "scores" not in result or not result["scores"]:
+                result["scores"] = {p: 50 for p in others}
             for p in others:
                 if p not in result["scores"]:
                     result["scores"][p] = 50
             return result
-        return {
-            "speech": f"我观察了一下，{'需要大家注意发言逻辑。' if self.role != '狼人' else '暂时没有头绪。'}",
-            "scores": {p: 50 for p in others}
+        # fallback：至少生成有意义的发言
+        fallback_speeches = {
+            "狼人": [f"我觉得{random.choice(others)}的发言很可疑，大家注意。", f"昨晚平安夜，我支持先听大家分析。"],
+            "预言家": [f"我有查验信息，但先观察一轮。", f"我认为{random.choice(others)}需要重点关注。"],
+            "女巫": [f"昨晚我用了药，现在观察局势。", f"大家注意{random.choice(others)}的发言逻辑。"],
+            "猎人": [f"我在观察，{random.choice(others)}的发言有漏洞。", f"先听其他人分析，我有自己判断。"],
+            "平民": [f"我觉得{random.choice(others)}比较可疑。", f"根据发言逻辑，我怀疑{random.choice(others)}。"],
         }
+        speeches = fallback_speeches.get(self.role, [f"我怀疑{random.choice(others)}。"])
+        return {"speech": random.choice(speeches), "scores": {p: 50 for p in others}}
 
     def day_vote(self, alive_players, history):
         targets = [p for p in alive_players if p != self.name]
         if not targets:
-            return {"vote": alive_players[0], "reason": "无选择"}
+            return {"vote": alive_players[0]}
         prompt = (
-            f"狼人杀投票。你是{self.name}，身份{self.role}。"
-            f"可投：{','.join(targets)}。"
-            f"记录：{history[-400:]}"
-            f"{'狼人：投村民转移嫌疑。' if self.role=='狼人' else '投最可疑的狼人。'}"
-            f'只返回JSON：{{"vote":"玩家名","reason":"理由"}}'
+            f'狼人杀投票环节。你是{self.name}，身份{self.role}。'
+            f'可投票目标：{targets}。记录：{history[-300:]}'
+            f'{"投给村民转移嫌疑。" if self.role=="狼人" else "投给最可疑的狼人。"}'
+            f'直接输出JSON：{{"vote": "{targets[0]}", "reason": "理由"}}'
         )
         result = self._call(prompt)
         if result and result.get("vote") in targets:
             return result
-        import random; return {"vote": random.choice(targets), "reason": "综合判断"}
+        return {"vote": random.choice(targets), "reason": "综合判断"}
 
     def hunter_shoot(self, alive_players, history):
         targets = [p for p in alive_players if p != self.name]
         if not targets:
             return {"shoot": None}
         prompt = (
-            f"狼人杀。你是猎人{self.name}，即将死亡可开枪带走一人。"
-            f"存活：{','.join(targets)}。记录：{history[-300:]}"
-            f'只返回JSON：{{"shoot":"玩家名"}}'
+            f'狼人杀猎人{self.name}死亡，可开枪带走一人。'
+            f'存活：{targets}。记录：{history[-200:]}'
+            f'直接输出JSON：{{"shoot": "{targets[0]}"}}'
         )
         result = self._call(prompt)
         if result and result.get("shoot") in targets:
             return result
-        import random; return {"shoot": random.choice(targets)}
+        return {"shoot": random.choice(targets)}
