@@ -101,7 +101,44 @@ div[data-testid="stSelectbox"] label, div[data-testid="stTextInput"] label {
 """, unsafe_allow_html=True)
 
 # ─── API Key ────────────────────────────────────────────────────────────────────
-API_KEY = st.secrets["GEMINI_KEY"]
+try:
+    API_KEY = st.secrets["GEMINI_KEY"]
+except Exception as e:
+    st.error(f"❌ 读取 Secrets 失败：{e}")
+    API_KEY = ""
+
+# ─── API 连通测试（侧边栏）──────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("### 🔧 调试")
+    st.code(f"Key 前8位: {API_KEY[:8]}..." if API_KEY else "Key 为空！", language=None)
+    # 显示API错误日志
+    if st.session_state.get("api_errors"):
+        st.markdown("**最近错误：**")
+        for err in st.session_state["api_errors"][-5:]:
+            st.error(err)
+        if st.button("清除错误日志"):
+            st.session_state["api_errors"] = []
+    if st.session_state.get("api_last_raw"):
+        st.markdown("**最近成功回复：**")
+        for name, raw in list(st.session_state["api_last_raw"].items())[-3:]:
+            st.code(f"{name}: {raw}")
+
+    if st.button("测试 Gemini API"):
+        import requests as _req
+        try:
+            r = _req.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}",
+                headers={"Content-Type": "application/json"},
+                json={"contents": [{"parts": [{"text": "说你好，只输出这两个字"}]}]},
+                timeout=10
+            )
+            if r.status_code == 200:
+                reply = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+                st.success(f"✅ API 连通！回复：{reply}")
+            else:
+                st.error(f"❌ HTTP {r.status_code}：{r.text[:300]}")
+        except Exception as ex:
+            st.error(f"❌ 异常：{ex}")
 
 # ─── Helpers ───────────────────────────────────────────────────────────────────
 ROLE_ICONS = {"狼人": "🐺", "预言家": "🔮", "女巫": "🧙", "猎人": "🏹", "平民": "👤"}
@@ -263,7 +300,7 @@ with mid:
                             result = wolf_bot.night_wolf_action(engine.get_alive_players(), wolves)
                             st.session_state.wolf_kill_target = result.get("kill")
                     if not st.session_state.wolf_kill_target:
-                        alive_non_wolf = [p for p in engine.get_alive_players() if engine.players[p] != "狼人"]
+                        alive_non_wolf = [p for p in engine.get_alive_players() if engine.players[p] != "狼人" and p != "你"]
                         st.session_state.wolf_kill_target = random.choice(alive_non_wolf) if alive_non_wolf else None
 
                 kill_target = st.session_state.wolf_kill_target
