@@ -111,18 +111,6 @@ except Exception as e:
 with st.sidebar:
     st.markdown("### 🔧 调试")
     st.code(f"Key 前8位: {API_KEY[:8]}..." if API_KEY else "Key 为空！", language=None)
-    # 显示API错误日志
-    if st.session_state.get("api_errors"):
-        st.markdown("**最近错误：**")
-        for err in st.session_state["api_errors"][-5:]:
-            st.error(err)
-        if st.button("清除错误日志"):
-            st.session_state["api_errors"] = []
-    if st.session_state.get("api_last_raw"):
-        st.markdown("**最近成功回复：**")
-        for name, raw in list(st.session_state["api_last_raw"].items())[-3:]:
-            st.code(f"{name}: {raw}")
-
     if st.button("测试 Gemini API"):
         import requests as _req
         try:
